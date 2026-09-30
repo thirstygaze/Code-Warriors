@@ -1,0 +1,6 @@
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+<rect width="120" height="120" rx="20" fill="#e4efe6"/>
+<path d="M40 40 h40 l-5 50 a5 5 0 0 1 -5 5 h-20 a5 5 0 0 1 -5 -5 z" fill="#eaf2fb" stroke="#c8d8e8" stroke-width="2"/>
+<path d="M42 48 h36 l-4 40 a4 4 0 0 1 -4 4 h-20 a4 4 0 0 1 -4 -4 z" fill="#eaf2fb"/>
+<rect x="56" y="18" width="6" height="30" rx="3" fill="#2f6d4f" transform="rotate(8 59 33)"/>
+</svg>
