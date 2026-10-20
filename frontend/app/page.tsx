@@ -5,6 +5,7 @@ import { ApiRequestError, apiRequest, foodImage, initialProducts, mapApiNotifica
 import { AdminDashboard, CategoriesView, TeamView } from "./components/AdminViews";
 import { LandingScreen } from "./components/LandingScreen";
 import { LoginScreen } from "./components/LoginScreen";
+import { ChangePasswordDialog } from "./components/ChangePasswordDialog";
 import { InventoryView, MenuView, OrdersView, Overview } from "./components/StaffViews";
 import { NotificationsView, StudentOrdersView } from "./components/StudentViews";
 import { Icon } from "./components/SharedComponents";
@@ -14,6 +15,7 @@ export default function Home() {
   const [apiToken, setApiToken] = useState<string | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const [view, setView] = useState<View>("Order food");
   const [category, setCategory] = useState<Category>("All");
   const [query, setQuery] = useState("");
@@ -361,10 +363,10 @@ export default function Home() {
           <button type="button" onClick={() => setNotice("Ask the canteen team at counter 1 — we’re happy to help!")}>Get in touch <Icon name="arrow" size={14} /></button>
         </div>
         {account ? (
-          <button className="profile" type="button" onClick={signOut} aria-label="Log out">
+          <button className="profile" type="button" onClick={() => setShowChangePassword(true)} aria-label="Change password">
             <span className="avatar">{accountInitials}</span>
             <span className="profile-copy"><strong>{account.name}</strong><small>{account.role === "admin" ? "School administrator" : account.role === "staff" ? "Canteen staff" : "Student account"}</small></span>
-            <span className="profile-dots"><Icon name="logout" size={16} /></span>
+            <span className="profile-dots"><Icon name="key" size={16} /></span>
           </button>
         ) : (
           <button className="sidebar-signin" type="button" onClick={() => setShowLogin(true)}><Icon name="users" size={17} /> Sign in to your account <Icon name="arrow" size={15} /></button>
@@ -384,6 +386,7 @@ export default function Home() {
                 setNotice(account ? "Student order notifications are in the Notifications workspace." : "Sign in to view your notifications.");
               }
             }}><Icon name="bell" size={19} /><i /></button>
+            {account && <button className="icon-button" type="button" aria-label="Change password" title="Change password" onClick={() => setShowChangePassword(true)}><Icon name="key" size={17} /></button>}
             {account
               ? <button className="top-avatar" type="button" aria-label={`Log out ${account.name}`} title="Log out" onClick={signOut}><Icon name="logout" size={16} /></button>
               : <button className="top-signin" type="button" onClick={() => setShowLogin(true)}>Sign in <Icon name="arrow" size={15} /></button>}
@@ -496,6 +499,7 @@ export default function Home() {
       </section>
 
       {notice && <div className="toast-message" role="status"><span><Icon name="check" size={16} /></span>{notice}<button type="button" aria-label="Dismiss notification" onClick={() => setNotice("")}><Icon name="close" size={16} /></button></div>}
+      {showChangePassword && apiToken && <ChangePasswordDialog token={apiToken} onClose={() => setShowChangePassword(false)} />}
       {(!account || account.role === "student") && view === "Order food" && <button className="mobile-cart-button" type="button" onClick={() => setMobileCart(true)}><Icon name="bag" size={18} /> Your order <span>{itemCount}</span><strong>{money(subtotal)}</strong></button>}
     </main>
   );

@@ -12,6 +12,7 @@ use App\Models\StaffOrder;
 use App\Models\User;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
@@ -151,6 +152,61 @@ class CanteenAccessTest extends TestCase
             'password' => 'new-password-123',
             'role' => 'student',
         ])->assertOk();
+    }
+
+    public function test_all_account_roles_can_change_their_own_password(): void
+    {
+        foreach (['student', 'staff', 'admin'] as $role) {
+            $user = User::factory()->create([
+                'role' => $role,
+                'password' => Hash::make('old-password-123'),
+            ]);
+            $currentToken = $user->createToken('current-session');
+            $user->createToken('other-session');
+            Auth::forgetGuards();
+            $this->assertTrue(Hash::check('old-password-123', $user->fresh()->password));
+            $this->withToken($currentToken->plainTextToken)->getJson('/api/auth/me')
+                ->assertOk()
+                ->assertJsonPath('user.id', $user->id);
+
+            $this->withToken($currentToken->plainTextToken)->postJson('/api/auth/change-password', [
+                'current_password' => 'old-password-123',
+                'password' => 'new-password-456',
+                'password_confirmation' => 'new-password-456',
+            ])->assertOk()
+                ->assertJsonPath('message', 'Your password has been changed successfully.');
+
+            $this->assertTrue(Hash::check('new-password-456', $user->fresh()->password));
+            $this->assertDatabaseHas('personal_access_tokens', ['id' => $currentToken->accessToken->id]);
+            $this->assertDatabaseMissing('personal_access_tokens', [
+                'tokenable_id' => $user->id,
+                'name' => 'other-session',
+            ]);
+        }
+    }
+
+    public function test_password_change_rejects_an_incorrect_current_password(): void
+    {
+        $user = User::factory()->create(['password' => Hash::make('old-password-123')]);
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/auth/change-password', [
+            'current_password' => 'incorrect-password',
+            'password' => 'new-password-456',
+            'password_confirmation' => 'new-password-456',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['current_password']);
+
+        $this->assertTrue(Hash::check('old-password-123', $user->fresh()->password));
+    }
+
+    public function test_password_change_requires_authentication(): void
+    {
+        $this->postJson('/api/auth/change-password', [
+            'current_password' => 'old-password-123',
+            'password' => 'new-password-456',
+            'password_confirmation' => 'new-password-456',
+        ])->assertUnauthorized();
     }
 
     public function test_role_middleware_rejects_students_from_staff_and_admin_routes(): void
@@ -469,6 +525,54 @@ class CanteenAccessTest extends TestCase
             'CONTENT_TYPE' => 'application/json',
             'HTTP_PAYMONGO_SIGNATURE' => 't='.now()->timestamp.',te=invalid',
         ], '{"data":{}}')->assertUnauthorized();
+    }
+
+    public function test_paymongo_webhook_accepts_standard_signature_header_format(): void
+    {
+        config()->set('services.paymongo.webhook_secret', 'whsk_test_example');
+        $student = User::factory()->create(['role' => 'student']);
+        $staff = User::factory()->create(['role' => 'staff']);
+        $order = $this->makeOrder($student);
+        $payment = $order->payment;
+        $payment->update(['provider_checkout_id' => 'cs_test_order']);
+        $payload = [
+            'data' => [
+                'type' => 'checkout_session.payment.paid',
+                'livemode' => false,
+                'data' => [
+                    'id' => 'cs_test_order',
+                    'type' => 'checkout_session',
+                    'attributes' => [
+                        'reference_number' => $payment->reference_number,
+                        'payment_intent' => ['id' => 'pi_test_order'],
+                        'payments' => [[
+                            'attributes' => ['source' => ['type' => 'gcash']],
+                        ]],
+                    ],
+                ],
+            ],
+        ];
+        $body = json_encode($payload, JSON_THROW_ON_ERROR);
+        $timestamp = (string) now()->timestamp;
+        $signature = hash_hmac('sha256', $timestamp.'.'.$body, 'whsk_test_example');
+        $headers = [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_PAYMONGO_SIGNATURE' => "t={$timestamp},v1={$signature}",
+        ];
+
+        $this->call('POST', '/api/webhooks/paymongo', [], [], [], $headers, $body)
+            ->assertOk();
+
+        $this->assertDatabaseHas('payments', [
+            'payment_id' => $payment->payment_id,
+            'payment_status' => 'paid',
+            'payment_method' => 'gcash',
+            'provider_payment_intent_id' => 'pi_test_order',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $staff->id,
+            'order_id' => $order->order_id,
+        ]);
     }
 
     public function test_admin_role_changes_keep_student_and_staff_profiles_in_sync(): void

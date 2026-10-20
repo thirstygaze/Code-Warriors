@@ -18,6 +18,7 @@ Route::post('/webhooks/paymongo', PayMongoWebhookController::class)->middleware(
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
+    Route::post('/auth/change-password', [AuthController::class, 'changePassword'])->middleware('throttle:5,1');
 
     Route::middleware('role:student')->group(function (): void {
         Route::get('/student/orders', [StudentOrderController::class, 'index']);

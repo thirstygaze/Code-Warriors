@@ -107,7 +107,7 @@ All protected routes use server-side authentication and role middleware; hiding 
 ## Main API routes
 
 - `GET /api/menu`
-- `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout`
+- `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout`, `POST /api/auth/change-password` (authenticated; requires current password)
 - `POST /api/auth/forgot-password`, `POST /api/auth/reset-password`
 - `POST /api/webhooks/paymongo` (signed PayMongo webhook; no bearer token)
 - `GET|POST /api/student/orders` (orders accept `payment_method: paymongo|cash`), `GET /api/student/orders/{order}/payment`, `GET /api/student/notifications`

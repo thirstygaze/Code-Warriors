@@ -126,12 +126,28 @@ class PayMongoWebhookController extends Controller
      */
     private function hasValidSignature(Request $request, array $payload, string $rawBody, string $secret): bool
     {
-        $parts = [];
-        foreach (explode(',', (string) $request->header('Paymongo-Signature')) as $part) {
-            [$key, $value] = array_pad(explode('=', trim($part), 2), 2, null);
-            if (is_string($value)) {
-                $parts[$key] = $value;
+        $signatureHeader = null;
+        foreach (['Paymongo-Signature', 'PayMongo-Signature', 'X-Paymongo-Signature', 'X-PayMongo-Signature'] as $headerName) {
+            $headerValue = $request->header($headerName);
+            if (is_string($headerValue) && trim($headerValue) !== '') {
+                $signatureHeader = $headerValue;
+                break;
             }
+        }
+
+        if (! is_string($signatureHeader) || trim($signatureHeader) === '') {
+            return false;
+        }
+
+        $parts = [];
+        foreach (explode(',', $signatureHeader) as $part) {
+            $pair = array_pad(explode('=', trim($part), 2), 2, null);
+            [$key, $value] = $pair;
+            if (! is_string($key) || ! is_string($value)) {
+                continue;
+            }
+
+            $parts[strtolower(trim($key))] = trim($value);
         }
 
         $timestamp = $parts['t'] ?? null;
@@ -140,8 +156,19 @@ class PayMongoWebhookController extends Controller
         }
 
         $eventData = $payload['data'] ?? [];
-        $signatureKey = ($eventData['livemode'] ?? false) ? 'li' : 'te';
-        $providedSignature = $parts[$signatureKey] ?? null;
+        $signatureKeys = ['v1', 'te', 'li', 'h1'];
+        if (isset($eventData['livemode']) && $eventData['livemode'] === true) {
+            $signatureKeys = ['v1', 'li', 'h1', 'te'];
+        }
+
+        $providedSignature = null;
+        foreach ($signatureKeys as $signatureKey) {
+            if (isset($parts[$signatureKey]) && is_string($parts[$signatureKey]) && $parts[$signatureKey] !== '') {
+                $providedSignature = $parts[$signatureKey];
+                break;
+            }
+        }
+
         if (! is_string($providedSignature)) {
             return false;
         }

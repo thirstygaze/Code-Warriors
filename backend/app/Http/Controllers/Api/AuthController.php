@@ -84,6 +84,31 @@ class AuthController extends Controller
         return response()->json(['user' => $request->user()->load('staffProfile:user_id,stall_name')]);
     }
 
+    public function changePassword(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'current_password' => ['required', 'string'],
+            'password' => ['required', 'string', 'min:12', 'confirmed', 'different:current_password'],
+        ]);
+
+        $user = $request->user();
+        if (! Hash::check($validated['current_password'], $user->password)) {
+            return response()->json([
+                'message' => 'The current password is incorrect.',
+                'errors' => ['current_password' => ['The current password is incorrect.']],
+            ], 422);
+        }
+
+        $user->forceFill(['password' => $validated['password']])->save();
+
+        $currentAccessToken = $user->currentAccessToken();
+        if ($currentAccessToken instanceof \Laravel\Sanctum\PersonalAccessToken && $currentAccessToken->getKey() !== null) {
+            $user->tokens()->where('id', '!=', $currentAccessToken->getKey())->delete();
+        }
+
+        return response()->json(['message' => 'Your password has been changed successfully.']);
+    }
+
     public function forgotPassword(Request $request): JsonResponse
     {
         $request->validate(['email' => ['required', 'email']]);
