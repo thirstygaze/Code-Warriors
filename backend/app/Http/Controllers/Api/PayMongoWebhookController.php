@@ -38,7 +38,8 @@ class PayMongoWebhookController extends Controller
             return response()->json(['message' => 'Invalid webhook signature.'], 401);
         }
 
-        $event = $payload['data'] ?? [];
+        $eventEnvelope = $payload['data'] ?? [];
+        $event = $eventEnvelope['attributes'] ?? $eventEnvelope;
 
         if (($event['type'] ?? null) !== 'checkout_session.payment.paid') {
             return response()->json(['received' => true]);
@@ -155,9 +156,11 @@ class PayMongoWebhookController extends Controller
             return false;
         }
 
-        $eventData = $payload['data'] ?? [];
+        $eventEnvelope = $payload['data'] ?? [];
+        $eventAttributes = $eventEnvelope['attributes'] ?? [];
+        $livemode = $eventAttributes['livemode'] ?? $eventEnvelope['livemode'] ?? null;
         $signatureKeys = ['v1', 'te', 'li', 'h1'];
-        if (isset($eventData['livemode']) && $eventData['livemode'] === true) {
+        if ($livemode === true) {
             $signatureKeys = ['v1', 'li', 'h1', 'te'];
         }
 

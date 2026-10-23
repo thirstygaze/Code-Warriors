@@ -517,6 +517,56 @@ class CanteenAccessTest extends TestCase
         ]);
     }
 
+    public function test_paymongo_nested_event_envelope_marks_checkout_paid(): void
+    {
+        config()->set('services.paymongo.webhook_secret', 'whsk_test_example');
+        $student = User::factory()->create(['role' => 'student']);
+        $staff = User::factory()->create(['role' => 'staff']);
+        $order = $this->makeOrder($student);
+        $payment = $order->payment;
+        $payment->update(['provider_checkout_id' => 'cs_test_nested_order']);
+        $payload = [
+            'data' => [
+                'type' => 'event',
+                'attributes' => [
+                    'type' => 'checkout_session.payment.paid',
+                    'livemode' => false,
+                    'data' => [
+                        'id' => 'cs_test_nested_order',
+                        'type' => 'checkout_session',
+                        'attributes' => [
+                            'reference_number' => $payment->reference_number,
+                            'metadata' => ['order_id' => (string) $order->order_id],
+                            'payment_intent' => ['id' => 'pi_test_nested_order'],
+                            'payments' => [[
+                                'attributes' => ['source' => ['type' => 'gcash']],
+                            ]],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+        $body = json_encode($payload, JSON_THROW_ON_ERROR);
+        $timestamp = (string) now()->timestamp;
+        $signature = hash_hmac('sha256', $timestamp.'.'.$body, 'whsk_test_example');
+
+        $this->call('POST', '/api/webhooks/paymongo', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_PAYMONGO_SIGNATURE' => "t={$timestamp},te={$signature}",
+        ], $body)->assertOk()->assertJsonPath('received', true);
+
+        $this->assertDatabaseHas('payments', [
+            'payment_id' => $payment->payment_id,
+            'payment_status' => 'paid',
+            'payment_method' => 'gcash',
+            'provider_payment_intent_id' => 'pi_test_nested_order',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $staff->id,
+            'order_id' => $order->order_id,
+        ]);
+    }
+
     public function test_paymongo_webhook_rejects_invalid_signatures(): void
     {
         config()->set('services.paymongo.webhook_secret', 'whsk_test_example');

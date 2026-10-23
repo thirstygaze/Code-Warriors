@@ -105,6 +105,32 @@ export default function Home() {
     }
   }
 
+  useEffect(() => {
+    if (!apiToken || !account || account.role === "student" || view !== "Orders") return;
+
+    let active = true;
+    let refreshing = false;
+    const refreshOrders = async () => {
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        const response = await apiRequest<{ data: { data: Parameters<typeof mapApiOrder>[0][] } }>("/staff/orders", apiToken);
+        if (active) setOrders(response.data.data.map((order) => mapApiOrder(order)));
+      } catch (error) {
+        if (active) setNotice(error instanceof Error ? `Could not refresh orders: ${error.message}` : "Could not refresh orders.");
+      } finally {
+        refreshing = false;
+      }
+    };
+
+    void refreshOrders();
+    const interval = window.setInterval(() => { void refreshOrders(); }, 10000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [account, apiToken, view]);
+
   const visibleProducts = useMemo(
     () => products.filter((product) =>
       product.available &&
